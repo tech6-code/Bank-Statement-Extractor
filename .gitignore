@@ -1,0 +1,7 @@
+*.env
+node_modules/
+service_account.json
+backend/uploads/
+backend/dist/
+frontend/dist/
+.vscode/

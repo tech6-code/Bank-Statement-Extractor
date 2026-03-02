@@ -1,7 +1,44 @@
-*.env
+# Dependencies
 node_modules/
+**/node_modules/
+
+# Build artifacts
+dist/
+**/dist/
+build/
+**/build/
+
+# Environment files
+.env
+*.env
+*.env.*
+!.env.example
+
+# Google Cloud Credentials
 service_account.json
+
+# Local Uploads
 backend/uploads/
-backend/dist/
-frontend/dist/
+
+# IDE Settings
 .vscode/
+.idea/
+*.swp
+*.swo
+.project
+.settings/
+.classpath
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Vite/Next.js cache
+.vite/
+.next/

@@ -1,7 +1,8 @@
 import { Worker, Job } from 'bullmq';
 import { redisConfig } from '../config/redis';
 import pool from '../config/db';
-import { processDocument, extractTextFromDocument, extractPagesContent } from '../services/docAiService';
+import { splitPdf } from '../utils/pdfUtils';
+import { processDocument, mergeDocuments, extractTextFromDocument, extractPagesContent } from '../services/docAiService';
 import { extractTransactionsFromText, chunkText } from '../services/claudeService';
 import { extractTransactionsWithGemini } from '../services/geminiService';
 import {
@@ -19,10 +20,20 @@ const worker = new Worker(
             // 1. Update status to processing
             await pool.execute('UPDATE extraction_jobs SET status = ? WHERE id = ?', ['processing', jobId]);
 
-            // 2. Document AI Processing
-            const document = await processDocument(filePath);
+            // 2. Proactive Splitting for Large PDFs (DocAI limit is typically 15-30 pages synchronous)
+            console.log(`Analyzing/Splitting PDF: ${fileName}`);
+            const pdfChunks = await splitPdf(filePath, 15);
+            console.log(`Document split into ${pdfChunks.length} chunks.`);
+
+            // Process PDF chunks in parallel
+            const docPromises = pdfChunks.map(chunk => processDocument(chunk));
+            const docResults = await Promise.all(docPromises);
+
+            // Merge individual DocAI documents into one master document
+            const document = mergeDocuments(docResults);
+
             if (!document) {
-                throw new Error('Document AI failed to process the document');
+                throw new Error('Document AI failed to process any document chunks');
             }
             const text = extractTextFromDocument(document);
             const totalPages = Math.max(1, document.pages?.length || 1);
@@ -219,11 +230,11 @@ const worker = new Worker(
     }
 );
 
-worker.on('completed', (job) => {
+worker.on('completed', (job: Job) => {
     console.log(`Job ${job.id} completed!`);
 });
 
-worker.on('failed', (job, err) => {
+worker.on('failed', (job: Job | undefined, err: Error) => {
     console.log(`Job ${job?.id} failed with ${err.message}`);
 });
 

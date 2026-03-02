@@ -6,16 +6,21 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const client = new v1.DocumentProcessorServiceClient();
 
-export const processDocument = async (filePath: string) => {
+export const processDocument = async (source: string | Buffer) => {
     const projectId = process.env.GCP_PROJECT_ID;
     const location = process.env.DOCAI_LOCATION || 'us';
     const processorId = process.env.DOCAI_PROCESSOR_ID;
 
     const name = `projects/${projectId}/locations/${location}/processors/${processorId}`;
 
-    const fs = require('fs');
-    const imageContext = fs.readFileSync(filePath);
-    const encodedImage = Buffer.from(imageContext).toString('base64');
+    let encodedImage: string;
+    if (typeof source === 'string') {
+        const fs = require('fs');
+        const imageContext = fs.readFileSync(source);
+        encodedImage = Buffer.from(imageContext).toString('base64');
+    } else {
+        encodedImage = source.toString('base64');
+    }
 
     const request = {
         name,
@@ -30,6 +35,62 @@ export const processDocument = async (filePath: string) => {
 
     return document;
 };
+
+// Merges multiple DocAI document objects into one
+export const mergeDocuments = (documents: any[]) => {
+    if (documents.length === 0) return null;
+    if (documents.length === 1) return documents[0];
+
+    const merged = {
+        text: '',
+        pages: [] as any[]
+    };
+
+    let textOffset = 0;
+    for (const doc of documents) {
+        const textLen = doc.text?.length || 0;
+
+        // Merge Text
+        merged.text += doc.text || '';
+
+        // Merge Pages and adjust indices
+        if (doc.pages) {
+            for (const page of doc.pages) {
+                const newPage = JSON.parse(JSON.stringify(page)); // Deep copy
+
+                // Adjust textAnchor indices in ALL components (lines, tokens, etc.)
+                // Since our grid extraction uses page.lines, we MUST adjust line anchors.
+                adjustTextAnchors(newPage, textOffset);
+
+                merged.pages.push(newPage);
+            }
+        }
+
+        textOffset += textLen;
+    }
+
+    return merged;
+};
+
+function adjustTextAnchors(obj: any, offset: number) {
+    if (!obj || typeof obj !== 'object') return;
+
+    if (obj.textAnchor && obj.textAnchor.textSegments) {
+        for (const segment of obj.textAnchor.textSegments) {
+            if (segment.startIndex !== undefined) segment.startIndex = String(Number(segment.startIndex) + offset);
+            if (segment.endIndex !== undefined) segment.endIndex = String(Number(segment.endIndex) + offset);
+        }
+    }
+
+    // Recursively adjust nested objects (lines, tokens, tables, etc.)
+    for (const key in obj) {
+        if (Array.isArray(obj[key])) {
+            for (const item of obj[key]) adjustTextAnchors(item, offset);
+        } else if (typeof obj[key] === 'object') {
+            adjustTextAnchors(obj[key], offset);
+        }
+    }
+}
 
 export const extractTextFromDocument = (document: any) => {
     const { text } = document;

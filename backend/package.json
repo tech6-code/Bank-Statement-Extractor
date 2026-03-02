@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+    "dev": "nodemon",
     "build": "tsc",
     "start": "node dist/index.js"
   },
@@ -11,6 +11,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@google-cloud/documentai": "^9.5.0",
     "@google-cloud/vision": "^5.3.4",
+    "@google/generative-ai": "^0.24.1",
     "bullmq": "^5.70.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",

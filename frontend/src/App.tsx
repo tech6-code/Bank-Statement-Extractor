@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import Dashboard from './components/Dashboard';
 import FileUploader from './components/FileUploader';
-import { Layout, FileText, BarChart3, Receipt } from 'lucide-react';
+import RecentJobs from './components/RecentJobs';
+import { Layout, FileText, BarChart3, Receipt, History } from 'lucide-react';
 
 function App() {
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -24,19 +25,26 @@ function App() {
                 </div>
             </header>
 
-            <main className="container mx-auto px-4 py-8 max-w-7xl">
-                <div className="grid gap-8 lg:grid-cols-[400px_1fr]">
-                    {/* Left Column: Upload */}
+            <main className="container mx-auto px-4 py-8 max-w-[1600px]">
+                <div className="grid gap-8 lg:grid-cols-[320px_1fr]">
+                    {/* Left Column: Upload & History */}
                     <div className="space-y-6">
                         <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm">
                             <div className="flex items-center gap-2 mb-4">
                                 <FileText className="w-5 h-5 text-primary" />
-                                <h2 className="text-lg font-semibold">Multiple File Upload</h2>
+                                <h2 className="text-lg font-semibold">Upload Statements</h2>
                             </div>
-                            <p className="text-sm text-muted-foreground mb-6">
-                                Upload your bank statement PDFs (up to 300 pages). We'll handle the extraction and reconciliation.
-                            </p>
-                            <FileUploader onUploadSuccess={(jobIds: string[]) => console.log('Jobs created:', jobIds)} />
+                            <FileUploader onUploadSuccess={(jobIds) => setActiveJobId(jobIds[0])} />
+                        </div>
+
+                        <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+                            <div className="flex items-center gap-2 mb-4 shrink-0">
+                                <History className="w-5 h-5 text-primary" />
+                                <h2 className="text-lg font-semibold">Recent Extractions</h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                                <RecentJobs onSelectJob={setActiveJobId} selectedJobId={activeJobId} />
+                            </div>
                         </div>
 
                         <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm">
@@ -54,15 +62,15 @@ function App() {
                                     <span className="text-green-500 font-medium">Connected</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Claude 3.5 Sonnet</span>
-                                    <span className="text-green-500 font-medium">Available</span>
+                                    <span className="text-muted-foreground">Gemini 2.0 Flash</span>
+                                    <span className="text-green-500 font-medium">Ready</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Right Column: Dashboard */}
-                    <div className="min-h-[600px]">
+                    <div className="min-h-[600px] min-w-0">
                         <Dashboard onSelectJob={setActiveJobId} selectedJobId={activeJobId} />
                     </div>
                 </div>

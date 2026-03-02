@@ -1,20 +1,28 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const model = genAI.getGenerativeModel({
+  model: 'gemini-2.0-flash',
+  generationConfig: {
+    responseMimeType: 'application/json',
+    temperature: 0,
+    maxOutputTokens: 8192,
+  }
 });
 
-export const extractTransactionsFromText = async (text: string) => {
+export const extractTransactionsWithGemini = async (text: string) => {
   const prompt = `
-    Analyze the following bank statement text.
+    Analyze the following bank statement text (which may be a markdown table or raw OCR).
     1. Extract Statement Header Info (Account Number, IBAN, Currency, Period, Branch, etc.).
     2. Extract ALL Transactions.
 
-    Return a JSON object with the following schema:
+    Accuracy is critical (100% capture). 
+    
+    JSON Schema:
     {
       "header_info": {
         "account_number": "string",
@@ -57,38 +65,27 @@ export const extractTransactionsFromText = async (text: string) => {
     ${text}
   `;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 8192,
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-  });
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const outText = response.text();
 
-  const content = response.content[0];
-  if (content.type === 'text') {
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0].replace(/\\(?!"|\\|\/|b|f|n|r|t|u[0-9a-fA-F]{4})/g, ""));
-      } catch (e) {
-        console.error("Claude JSON parse error:", e);
+    try {
+      return JSON.parse(outText);
+    } catch (parseError) {
+      // Fallback: Try to find a JSON object block {...} if parsing the full text fails
+      const jsonMatch = outText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          return JSON.parse(jsonMatch[0].replace(/\\(?!"|\\|\/|b|f|n|r|t|u[0-9a-fA-F]{4})/g, ""));
+        } catch (innerError) {
+          throw parseError;
+        }
       }
+      throw parseError;
     }
+  } catch (error) {
+    console.error('Gemini extraction error:', error);
+    throw error;
   }
-  return { header_info: {}, transactions: [] };
-};
-
-export const chunkText = (text: string, maxRows: number = 500) => {
-  // Splits text into chunks of approx 500 lines. 
-  // This is optimal for Gemini 2.0 Flash's large context window while maintaining focus.
-  const lines = text.split('\n');
-  const chunks: string[] = [];
-  for (let i = 0; i < lines.length; i += 500) {
-    chunks.push(lines.slice(i, i + 500).join('\n'));
-  }
-  return chunks;
 };

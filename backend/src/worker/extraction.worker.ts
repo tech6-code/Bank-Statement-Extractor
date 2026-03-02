@@ -1,8 +1,9 @@
 import { Worker, Job } from 'bullmq';
 import { redisConfig } from '../config/redis';
 import pool from '../config/db';
-import { processDocument, extractTextFromDocument } from '../services/docAiService';
+import { processDocument, extractTextFromDocument, extractPagesContent } from '../services/docAiService';
 import { extractTransactionsFromText, chunkText } from '../services/claudeService';
+import { extractTransactionsWithGemini } from '../services/geminiService';
 import {
     detectDuplicates,
     reconcileTransactions,
@@ -24,54 +25,151 @@ const worker = new Worker(
                 throw new Error('Document AI failed to process the document');
             }
             const text = extractTextFromDocument(document);
-            const totalPages = document.pages?.length || 0;
+            const totalPages = Math.max(1, document.pages?.length || 1);
 
-            await pool.execute('UPDATE extraction_jobs SET total_pages = ? WHERE id = ?', [
+            await pool.execute('UPDATE extraction_jobs SET total_pages = ?, processed_pages = 0 WHERE id = ?', [
                 totalPages,
                 jobId,
             ]);
 
-            // 3. Chunk text (simplified for now, Claude 3.5 can handle quite a lot)
-            // In a real scenario, we might want more granular chunking based on table rows.
-            // For this demo, we'll send the whole text if it's within limits or chunk it.
-            const chunks = chunkText(text);
-            let allTransactions: any[] = [];
+            // 3. Prepare Chunks (Page-by-page with Tables + Text)
+            console.log('Extracting content page-by-page...');
+            const chunks = extractPagesContent(document);
 
-            let processedPages = 0;
-            for (const chunk of chunks) {
-                const transactions = await extractTransactionsFromText(chunk);
-                allTransactions = allTransactions.concat(transactions);
-
-                // Save partial progress
-                processedPages += Math.ceil(totalPages / chunks.length);
-                await pool.execute('UPDATE extraction_jobs SET processed_pages = ? WHERE id = ?', [
-                    Math.min(processedPages, totalPages),
-                    jobId,
-                ]);
-
-                // Save raw data per chunk/page
-                await pool.execute('INSERT INTO raw_extracted_data (job_id, raw_row_data) VALUES (?, ?)', [
-                    jobId,
-                    JSON.stringify(transactions),
+            // DEBUG: Save raw DocAI chunks for inspection
+            for (let idx = 0; idx < chunks.length; idx++) {
+                await pool.execute('INSERT INTO debug_chunks (job_id, page_number, content) VALUES (?, ?, ?)', [
+                    jobId, idx + 1, chunks[idx]
                 ]);
             }
 
-            // 4. Duplicate Detection
+            let allTransactions: any[] = [];
+            let processedPagesCount = 0;
+            let combinedHeaderInfo: any = {};
+
+            console.log(`Processing ${chunks.length} chunks in parallel...`);
+
+            // Process chunks in parallel batches
+            const batchSize = 5;
+            for (let i = 0; i < chunks.length; i += batchSize) {
+                const batch = chunks.slice(i, i + batchSize);
+                const batchPromises = batch.map(async (chunk, index) => {
+                    let result: any;
+                    const maxRetries = 3;
+                    let attempt = 0;
+
+                    while (attempt < maxRetries) {
+                        try {
+                            console.log(`[Batch ${Math.floor(i / batchSize) + 1}] Processing chunk ${i + index + 1} (Attempt ${attempt + 1})...`);
+                            result = await extractTransactionsWithGemini(chunk);
+                            if (result) break; // Success
+                        } catch (geminiError: any) {
+                            attempt++;
+                            console.warn(`Attempt ${attempt} failed for chunk ${i + index + 1}: ${geminiError.message}`);
+                            if (attempt === maxRetries) {
+                                console.error(`Gemini failed after ${maxRetries} attempts, falling back to Claude...`);
+                                try {
+                                    result = await extractTransactionsFromText(chunk);
+                                } catch (claudeError: any) {
+                                    console.error(`Claude also failed for chunk ${i + index + 1}:`, claudeError.message);
+                                    return null;
+                                }
+                            }
+                            // Small delay before retry
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                    }
+                    return result;
+                });
+
+                const batchResults = await Promise.all(batchPromises);
+
+                for (const result of batchResults) {
+                    if (result) {
+                        // Handle both older array-style and newer object-style responses
+                        const transactions = Array.isArray(result) ? result : (result.transactions || []);
+                        const headerInfo = (!Array.isArray(result) && result.header_info) ? result.header_info : {};
+
+                        allTransactions = allTransactions.concat(transactions);
+                        combinedHeaderInfo = { ...combinedHeaderInfo, ...headerInfo };
+
+                        // Save raw data per chunk
+                        await pool.execute('INSERT INTO raw_extracted_data (job_id, raw_row_data) VALUES (?, ?)', [
+                            jobId,
+                            JSON.stringify(result),
+                        ]);
+                    }
+                }
+
+                // Update progress after each batch
+                processedPagesCount += Math.ceil((totalPages / chunks.length) * batch.length);
+                await pool.execute('UPDATE extraction_jobs SET processed_pages = ? WHERE id = ?', [
+                    Math.min(processedPagesCount, totalPages),
+                    jobId,
+                ]);
+            }
+
+            // 4. Clean out any "header-like" rows from transactions if they were accidentally included
+            allTransactions = allTransactions.filter(t => {
+                const desc = (t.description || '').toLowerCase().trim();
+                const debit = t.debit !== null ? Number(t.debit) : 0;
+                const credit = t.credit !== null ? Number(t.credit) : 0;
+
+                const hasAmount = (debit !== 0) || (credit !== 0);
+
+                // If it has no date and no amount, it's definitely not a transaction
+                if (!t.date && !hasAmount) return false;
+
+                // CRITICAL: Refined Metadata Filter
+                // We only exclude if the description is EXACTLY or heavily matching a metadata header
+                // and has NO money movement (debit/credit).
+                const exactMetadataHeaders = [
+                    'account number', 'iban', 'account type', 'opening balance',
+                    'closing balance', 'total debit', 'total credit', 'carried forward',
+                    'brought forward', 'statement period', 'currency', 'customer name',
+                    'branch name', 'ifsc code', 'swift code'
+                ];
+
+                if (!hasAmount && exactMetadataHeaders.some(key => desc === key || desc.startsWith(key + ':'))) {
+                    return false;
+                }
+
+                // If description is empty and no amounts, skip
+                if (!desc && !hasAmount) return false;
+
+                return true;
+            });
+
+            // 5. Intelligent Chronological Reordering
+            // Most bank statements are either Oldest-to-Newest or Newest-to-Oldest.
+            // We need them Oldest-to-Newest for reconciliation.
+            if (allTransactions.length > 1) {
+                const firstDate = allTransactions[0].date;
+                const lastDate = allTransactions[allTransactions.length - 1].date;
+
+                // If first date is later than last date, it's likely a descending statement
+                if (firstDate && lastDate && firstDate > lastDate) {
+                    console.log('Detected DESCENDING statement order. Reversing for chronological processing.');
+                    allTransactions.reverse();
+                }
+            }
+
+            // 6. Duplicate Detection
             const { uniqueTransactions, duplicateCount } = detectDuplicates(allTransactions);
 
-            // 5. Reconciliation Logic (Sequential)
+            // 7. Reconciliation Logic (Sequential)
             const { reconciledTransactions, reconciliationErrorsCount } = reconcileTransactions(
                 uniqueTransactions
             );
 
-            // 6. Confidence Scoring
+            // 7. Confidence Scoring
             const { score, low_confidence } = calculateConfidence(
                 reconciledTransactions,
                 duplicateCount,
                 reconciliationErrorsCount
             );
 
-            // 7. Save Transactions
+            // 8. Save Transactions
             for (const t of reconciledTransactions) {
                 await pool.execute(
                     `INSERT INTO transactions 
@@ -79,21 +177,21 @@ const worker = new Worker(
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         jobId,
-                        t.date,
-                        t.description,
-                        t.debit,
-                        t.credit,
-                        t.balance,
-                        t.reconciliation_status,
-                        t.validation_error,
+                        t.date || null,
+                        t.description || null,
+                        t.debit ?? null,
+                        t.credit ?? null,
+                        t.balance ?? null,
+                        t.reconciliation_status || 'valid',
+                        t.validation_error || null,
                     ]
                 );
             }
 
-            // 8. Final Status Update
+            // 9. Final Status Update
             await pool.execute(
                 `UPDATE extraction_jobs 
-         SET status = ?, transaction_count = ?, duplicate_count = ?, reconciliation_errors_count = ?, confidence = ?, raw_data_saved = TRUE 
+         SET status = ?, transaction_count = ?, duplicate_count = ?, reconciliation_errors_count = ?, confidence = ?, header_info = ?, raw_data_saved = TRUE 
          WHERE id = ?`,
                 [
                     'completed',
@@ -101,6 +199,7 @@ const worker = new Worker(
                     duplicateCount,
                     reconciliationErrorsCount,
                     score,
+                    JSON.stringify(combinedHeaderInfo),
                     jobId,
                 ]
             );

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS extraction_jobs (
     duplicate_count INT DEFAULT 0,
     reconciliation_errors_count INT DEFAULT 0,
     confidence DECIMAL(5, 2) DEFAULT 0.00,
+    header_info JSON,
     raw_data_saved BOOLEAN DEFAULT FALSE,
     error_message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

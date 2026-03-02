@@ -22,6 +22,16 @@ export const getJobStatus = async (jobId: string) => {
     return data;
 };
 
+export const getJobs = async () => {
+    const { data } = await api.get('/jobs');
+    return data.jobs as Job[];
+};
+
+export const deleteJob = async (jobId: string) => {
+    const { data } = await api.delete(`/extract/${jobId}`);
+    return data;
+};
+
 export interface Job {
     id: string;
     file_name: string;
@@ -33,6 +43,9 @@ export interface Job {
     reconciliation_errors_count: number;
     confidence: number;
     low_confidence: boolean;
+    created_at: string;
+    updated_at: string;
+    header_info?: any;
     error_message?: string;
     transactions?: Transaction[];
 }

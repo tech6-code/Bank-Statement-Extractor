@@ -63,7 +63,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectJob, selectedJobId }) => 
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0 overflow-hidden">
             {/* Job Header Info */}
             <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
@@ -119,27 +119,55 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectJob, selectedJobId }) => 
                     />
                 </div>
 
+                {/* Status-specific messaging/progress */}
+                {job?.status === 'queued' && (
+                    <div className="mt-6 p-4 bg-muted/30 border border-border/40 rounded-lg flex items-center gap-4">
+                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                        <div className="space-y-1">
+                            <p className="text-sm font-medium">Waiting in queue...</p>
+                            <p className="text-xs text-muted-foreground">Your job will start processing shortly as soon as a worker is available.</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Progress Bar (Visible during processing) */}
                 {job?.status === 'processing' && (
-                    <div className="mt-6 space-y-2">
-                        <div className="flex justify-between text-xs font-medium uppercase tracking-tight text-muted-foreground">
-                            <span>Extracting Pages</span>
-                            <span>{Math.round((job.processed_pages / job.total_pages) * 100)}%</span>
+                    <div className="mt-6 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            <p className="text-sm font-medium animate-pulse">Extracting transactions with Gemini AI...</p>
                         </div>
-                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-primary transition-all duration-500 ease-out"
-                                style={{ width: `${Math.round((job.processed_pages / job.total_pages) * 100)}%` }}
-                            />
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                <span>Progress</span>
+                                <span>{job.total_pages > 0 ? Math.round((job.processed_pages / job.total_pages) * 100) : 0}%</span>
+                            </div>
+                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden shadow-inner">
+                                <div
+                                    className="h-full bg-primary transition-all duration-700 ease-in-out"
+                                    style={{ width: `${job.total_pages > 0 ? Math.round((job.processed_pages / job.total_pages) * 100) : 0}%` }}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}
             </div>
 
+            {/* Statement Metadata */}
+            {job?.status === 'completed' && job.header_info && Object.keys(job.header_info).length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-bottom-4 duration-500 delay-200">
+                    <StatementInfoCard headerInfo={job.header_info} />
+                </div>
+            )}
+
             {/* Transactions Table */}
             {job?.status === 'completed' && job.transactions && (
-                <div className="bg-card border border-border/50 rounded-xl overflow-hidden shadow-sm">
-                    <TransactionsTable transactions={job.transactions} />
+                <div className="bg-card border border-border/50 rounded-xl p-4 shadow-sm">
+                    <h3 className="text-lg font-semibold mb-4 px-2">Transactions</h3>
+                    <TransactionsTable
+                        transactions={job.transactions}
+                        fileName={job.file_name}
+                    />
                 </div>
             )}
 
@@ -152,6 +180,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectJob, selectedJobId }) => 
                     </p>
                 </div>
             )}
+        </div>
+    );
+};
+
+const StatementInfoCard = ({ headerInfo }: { headerInfo: any }) => {
+    if (!headerInfo) return null;
+
+    const items = [
+        { label: 'Account Number', value: headerInfo.account_number },
+        { label: 'IBAN', value: headerInfo.iban },
+        { label: 'Currency', value: headerInfo.currency || 'AED' },
+        { label: 'Period', value: headerInfo.period },
+        { label: 'Branch', value: headerInfo.branch },
+        { label: 'Opening Balance', value: headerInfo.opening_balance ? `${headerInfo.currency || 'AED'} ${headerInfo.opening_balance.toLocaleString()}` : null },
+        { label: 'Closing Balance', value: headerInfo.closing_balance ? `${headerInfo.currency || 'AED'} ${headerInfo.closing_balance.toLocaleString()}` : null },
+    ].filter(i => i.value);
+
+    if (items.length === 0) return null;
+
+    return (
+        <div className="col-span-full md:col-span-2 lg:col-span-3 bg-card border border-border/50 rounded-xl p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Statement Details</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                {items.map((item, idx) => (
+                    <div key={idx} className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase">{item.label}</p>
+                        <p className="text-sm font-semibold truncate" title={item.value as string}>{item.value}</p>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };

@@ -49,7 +49,7 @@ export const getJobStatus = async (req: Request, res: Response) => {
     const job = rows[0];
 
     const [transactions]: any = await pool.execute(
-        'SELECT * FROM transactions WHERE job_id = ? ORDER BY transaction_date ASC',
+        'SELECT * FROM transactions WHERE job_id = ? ORDER BY transaction_date ASC, id ASC',
         [job_id]
     );
 
@@ -58,4 +58,26 @@ export const getJobStatus = async (req: Request, res: Response) => {
         low_confidence: job.confidence < 80,
         transactions,
     });
+};
+
+export const listJobs = async (req: Request, res: Response) => {
+    try {
+        const [rows]: any = await pool.execute(
+            'SELECT id, file_name, status, created_at, transaction_count FROM extraction_jobs ORDER BY created_at DESC LIMIT 20'
+        );
+        res.json({ success: true, jobs: rows });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const deleteJob = async (req: Request, res: Response) => {
+    const { job_id } = req.params;
+    try {
+        // Transactions and raw_extracted_data are ON DELETE CASCADE in schema
+        await pool.execute('DELETE FROM extraction_jobs WHERE id = ?', [job_id]);
+        res.json({ success: true, message: 'Job deleted successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 };

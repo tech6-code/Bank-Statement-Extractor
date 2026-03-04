@@ -64,22 +64,53 @@ export const extractTransactionsWithGemini = async (text: string) => {
     const response = await result.response;
     const outText = response.text();
 
-    try {
-      return JSON.parse(outText);
-    } catch (parseError) {
-      // Fallback: Try to find a JSON object block {...} if parsing the full text fails
-      const jsonMatch = outText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          return JSON.parse(jsonMatch[0].replace(/\\(?!"|\\|\/|b|f|n|r|t|u[0-9a-fA-F]{4})/g, ""));
-        } catch (innerError) {
-          throw parseError;
-        }
-      }
-      throw parseError;
-    }
+    return parseRobustJson(outText);
   } catch (error) {
     console.error('Gemini extraction error:', error);
     throw error;
   }
 };
+
+/**
+ * Robustly parses JSON from AI output, handling markdown blocks, 
+ * trailing commas, and other common syntax issues.
+ */
+function parseRobustJson(text: string): any {
+  // 1. Try direct parse
+  try {
+    return JSON.parse(text);
+  } catch (e) { }
+
+  // 2. Extract JSON block from potential markdown text
+  let jsonString = text;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    jsonString = jsonMatch[0];
+  }
+
+  // 3. Clean common AI artifacts
+  // Remove markdown fences
+  jsonString = jsonString.replace(/```json\n?|```/g, '');
+
+  // Remove potential single-line comments // ...
+  jsonString = jsonString.replace(/\/\/.*/g, '');
+
+  // Convert single-quoted values/keys to double-quoted
+  // This is a bit tricky but works for most JSON-like structures
+  jsonString = jsonString.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+
+  // Quote unquoted keys (e.g., { account_number: "..." })
+  // Matches a key followed by a colon
+  jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3');
+
+  // Remove trailing commas before closing braces/brackets
+  jsonString = jsonString.replace(/,\s*([\}\]])/g, '$1');
+
+  try {
+    return JSON.parse(jsonString);
+  } catch (error: any) {
+    console.error('Final JSON parse failed:', error.message);
+    console.error('Attempted to parse:', jsonString);
+    throw new Error(`Failed to parse Gemini response: ${error.message}`);
+  }
+}

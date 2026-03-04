@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uploadFiles } from '../services/api';
 import { Upload, X, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -15,6 +15,7 @@ interface FileUploaderProps {
 
 const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess }) => {
     const [files, setFiles] = useState<File[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const queryClient = useQueryClient();
 
     const uploadMutation = useMutation({
@@ -29,8 +30,16 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess }) => {
     });
 
     const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
+        if (e.target.files && e.target.files.length > 0) {
             setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+            // Reset the input value so the same file can be selected again if needed
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            // Reset mutation state when new files are added
+            if (uploadMutation.isSuccess || uploadMutation.isError) {
+                uploadMutation.reset();
+            }
         }
     };
 
@@ -51,11 +60,17 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess }) => {
                     "border-2 border-dashed rounded-lg p-8 transition-colors text-center cursor-pointer",
                     files.length > 0 ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/50"
                 )}
-                onClick={() => document.getElementById('file-upload')?.click()}
+                onClick={() => {
+                    if (uploadMutation.isSuccess || uploadMutation.isError) {
+                        uploadMutation.reset();
+                    }
+                    fileInputRef.current?.click();
+                }}
             >
                 <input
                     id="file-upload"
                     type="file"
+                    ref={fileInputRef}
                     multiple
                     accept=".pdf"
                     className="hidden"

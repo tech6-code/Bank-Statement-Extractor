@@ -57,8 +57,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess }) => {
         <div className="space-y-4">
             <div
                 className={cn(
-                    "border-2 border-dashed rounded-lg p-8 transition-colors text-center cursor-pointer",
-                    files.length > 0 ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/50"
+                    "border border-border/40 rounded-md p-6 bg-muted/10 transition-colors text-center cursor-pointer hover:bg-muted/20 hover:border-border/60",
+                    files.length > 0 && "bg-primary/5 border-primary/30"
                 )}
                 onClick={() => {
                     if (uploadMutation.isSuccess || uploadMutation.isError) {
@@ -76,24 +76,24 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess }) => {
                     className="hidden"
                     onChange={onFileChange}
                 />
-                <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-                <p className="text-sm font-medium">Click to upload or drag and drop</p>
-                <p className="text-xs text-muted-foreground mt-1">PDF bank statements only</p>
+                <Upload className="w-8 h-8 text-primary/60 mx-auto mb-3" />
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Click to upload or drag</p>
+                <p className="text-[10px] text-muted-foreground/60 mt-1 uppercase tracking-tight">PDF bank statements only</p>
             </div>
 
             {files.length > 0 && (
                 <div className="space-y-2">
                     {files.map((file, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border/50">
+                        <div key={i} className="flex items-center justify-between p-3 bg-muted/10 border border-border/40 rounded-md">
                             <div className="flex items-center gap-3">
-                                <FileText className="w-4 h-4 text-primary" />
-                                <span className="text-sm truncate max-w-[200px]">{file.name}</span>
+                                <FileText className="w-3.5 h-3.5 text-primary" />
+                                <span className="text-xs font-medium truncate max-w-[180px]">{file.name}</span>
                             </div>
                             <button
                                 onClick={(e) => { e.stopPropagation(); removeFile(i); }}
-                                className="p-1 hover:bg-muted rounded-full transition-colors"
+                                className="p-1 hover:bg-muted/30 rounded transition-colors"
                             >
-                                <X className="w-4 h-4 text-muted-foreground" />
+                                <X className="w-3.5 h-3.5 text-muted-foreground" />
                             </button>
                         </div>
                     ))}
@@ -101,12 +101,12 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onUploadSuccess }) => {
                     <button
                         onClick={handleUpload}
                         disabled={uploadMutation.isPending}
-                        className="w-full mt-4 bg-primary text-primary-foreground py-2.5 rounded-lg font-medium shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                        className="w-full mt-2 bg-primary text-primary-foreground py-2 rounded-md text-xs font-bold uppercase tracking-wider hover:bg-primary/90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                     >
                         {uploadMutation.isPending ? (
                             <>
-                                <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                                Uploading...
+                                <div className="w-3 h-3 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                                Processing...
                             </>
                         ) : (
                             'Start Extraction'

@@ -63,56 +63,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectJob, selectedJobId }) => 
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0 overflow-hidden">
+        <div className="space-y-6 w-full min-w-0 overflow-hidden text-foreground">
             {/* Job Header Info */}
-            <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                    <div className="space-y-1">
-                        <h2 className="text-2xl font-bold tracking-tight">{job?.file_name}</h2>
-                        <div className="flex items-center gap-3">
+            <div className="bg-card border border-border/40 rounded-md p-6">
+                <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-3xl font-bold tracking-tight text-foreground">{job.file_name}</h2>
+                        <div className="flex items-center gap-2">
                             <span className={cn(
-                                "px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider",
-                                job?.status === 'completed' && "bg-green-500/10 text-green-500",
-                                job?.status === 'processing' && "bg-blue-500/10 text-blue-500",
-                                job?.status === 'queued' && "bg-yellow-500/10 text-yellow-500",
-                                job?.status === 'failed' && "bg-destructive/10 text-destructive",
+                                "px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest",
+                                job.status === 'completed' ? "bg-green-500/10 text-green-500 border border-green-500/20" :
+                                    job.status === 'processing' ? "bg-blue-500/10 text-blue-500 border border-blue-500/20" :
+                                        job.status === 'queued' ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20" :
+                                            "bg-destructive/10 text-destructive border border-destructive/20"
                             )}>
-                                {job?.status}
-                            </span>
-                            <span className="text-sm text-muted-foreground italic">
-                                ID: {selectedJobId.substring(0, 8)}...
+                                {job.status}
                             </span>
                         </div>
                     </div>
-                    <button
-                        onClick={() => refetch()}
-                        className="p-2 hover:bg-muted rounded-lg transition-all active:scale-95"
-                    >
-                        <RefreshCw className={cn("w-5 h-5", job?.status === 'processing' && "animate-spin")} />
-                    </button>
                 </div>
 
                 {/* Analytics Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <StatCard
-                        icon={<FileDigit className="w-4 h-4" />}
+                        icon={<FileDigit className="w-3.5 h-3.5" />}
                         label="Transactions"
                         value={job?.transaction_count || 0}
                     />
                     <StatCard
-                        icon={<Hash className="w-4 h-4" />}
+                        icon={<Hash className="w-3.5 h-3.5" />}
                         label="Duplicates"
                         value={job?.duplicate_count || 0}
                         isWarning={job?.duplicate_count > 0}
                     />
                     <StatCard
-                        icon={<AlertCircle className="w-4 h-4" />}
-                        label="Reconcile Errors"
+                        icon={<AlertCircle className="w-3.5 h-3.5" />}
+                        label="Errors"
                         value={job?.reconciliation_errors_count || 0}
                         isDestructive={job?.reconciliation_errors_count > 0}
                     />
                     <StatCard
-                        icon={<CheckCircle2 className="w-4 h-4" />}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5" />}
                         label="Confidence"
                         value={`${job?.confidence || 0}%`}
                         isLowConfidence={job?.low_confidence}
@@ -121,30 +112,30 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectJob, selectedJobId }) => 
 
                 {/* Status-specific messaging/progress */}
                 {job?.status === 'queued' && (
-                    <div className="mt-6 p-4 bg-muted/30 border border-border/40 rounded-lg flex items-center gap-4">
-                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                        <div className="space-y-1">
-                            <p className="text-sm font-medium">Waiting in queue...</p>
-                            <p className="text-xs text-muted-foreground">Your job will start processing shortly as soon as a worker is available.</p>
+                    <div className="mt-6 p-4 bg-muted/10 border border-border/40 rounded-md flex items-center gap-4">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <div className="space-y-0.5">
+                            <p className="text-xs font-bold uppercase tracking-wide">Waiting in queue</p>
+                            <p className="text-[11px] text-muted-foreground/60 uppercase tracking-tight">Processing will start shortly</p>
                         </div>
                     </div>
                 )}
 
                 {/* Progress Bar (Visible during processing) */}
                 {job?.status === 'processing' && (
-                    <div className="mt-6 space-y-4">
+                    <div className="mt-8 space-y-4">
                         <div className="flex items-center gap-3">
-                            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                            <p className="text-sm font-medium animate-pulse">Extracting transactions with Gemini AI...</p>
+                            <div className="w-4 h-4 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                            <p className="text-xs font-bold uppercase tracking-widest text-primary/80">Processing with Gemini AI</p>
                         </div>
                         <div className="space-y-2">
-                            <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
                                 <span>Progress</span>
                                 <span>{job.total_pages > 0 ? Math.round((job.processed_pages / job.total_pages) * 100) : 0}%</span>
                             </div>
-                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden shadow-inner">
+                            <div className="h-1.5 w-full bg-muted/20 rounded-full overflow-hidden">
                                 <div
-                                    className="h-full bg-primary transition-all duration-700 ease-in-out"
+                                    className="h-full bg-primary transition-all duration-1000"
                                     style={{ width: `${job.total_pages > 0 ? Math.round((job.processed_pages / job.total_pages) * 100) : 0}%` }}
                                 />
                             </div>
@@ -155,15 +146,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectJob, selectedJobId }) => 
 
             {/* Statement Metadata */}
             {job?.status === 'completed' && job.header_info && Object.keys(job.header_info).length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-bottom-4 duration-500 delay-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <StatementInfoCard headerInfo={job.header_info} />
                 </div>
             )}
 
             {/* Transactions Table */}
             {job?.status === 'completed' && job.transactions && (
-                <div className="bg-card border border-border/50 rounded-xl p-4 shadow-sm">
-                    <h3 className="text-lg font-semibold mb-4 px-2">Transactions</h3>
+                <div className="bg-card border border-border/40 rounded-md p-4">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground/80 mb-4 px-2">Transactions</h3>
                     <TransactionsTable
                         transactions={job.transactions}
                         fileName={job.file_name}
@@ -172,11 +163,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectJob, selectedJobId }) => 
             )}
 
             {job?.status === 'failed' && (
-                <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-8 text-center">
-                    <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-destructive mb-2">Extraction Failed</h3>
-                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                        {job.error_message || 'An unexpected error occurred while processing the statement.'}
+                <div className="bg-destructive/5 border border-destructive/30 rounded-md p-8 text-center">
+                    <AlertCircle className="w-10 h-10 text-destructive/60 mx-auto mb-4" />
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-destructive/80 mb-2">Extraction Failed</h3>
+                    <p className="text-xs text-muted-foreground/60 font-medium">
+                        {job.error_message || 'An unexpected error occurred while processing.'}
                     </p>
                 </div>
             )}
@@ -188,7 +179,7 @@ const StatementInfoCard = ({ headerInfo }: { headerInfo: any }) => {
     if (!headerInfo) return null;
 
     const items = [
-        { label: 'Account Number', value: headerInfo.account_number },
+        { label: 'Account', value: headerInfo.account_number },
         { label: 'IBAN', value: headerInfo.iban },
         { label: 'Currency', value: headerInfo.currency || 'AED' },
         { label: 'Period', value: headerInfo.period },
@@ -200,13 +191,13 @@ const StatementInfoCard = ({ headerInfo }: { headerInfo: any }) => {
     if (items.length === 0) return null;
 
     return (
-        <div className="col-span-full md:col-span-2 lg:col-span-3 bg-card border border-border/50 rounded-xl p-6 shadow-sm">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Statement Details</h3>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="col-span-full md:col-span-2 lg:col-span-3 bg-card border border-border/40 rounded-md p-6">
+            <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-6">Statement Details</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
                 {items.map((item, idx) => (
-                    <div key={idx} className="space-y-1">
-                        <p className="text-[10px] text-muted-foreground font-medium uppercase">{item.label}</p>
-                        <p className="text-sm font-semibold truncate" title={item.value as string}>{item.value}</p>
+                    <div key={idx} className="space-y-1.5">
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">{item.label}</p>
+                        <p className="text-[14px] font-bold truncate leading-none tracking-tight text-foreground/90" title={item.value as string}>{item.value}</p>
                     </div>
                 ))}
             </div>
@@ -224,16 +215,17 @@ interface StatCardProps {
 }
 
 const StatCard = ({ icon, label, value, isWarning, isDestructive, isLowConfidence }: StatCardProps) => (
-    <div className="p-4 bg-muted/20 border border-border/40 rounded-lg space-y-2">
-        <div className="flex items-center gap-2 text-muted-foreground">
+    <div className="p-5 bg-muted/5 border border-border/40 rounded-md space-y-4">
+        <div className="flex items-center gap-2.5 text-muted-foreground/80">
             {icon}
-            <span className="text-xs font-medium uppercase truncate">{label}</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest truncate">{label}</span>
         </div>
         <div className={cn(
-            "text-2xl font-bold font-mono tracking-tighter",
+            "text-2xl font-bold tracking-tighter",
             isWarning && "text-yellow-500",
             isDestructive && "text-destructive",
-            isLowConfidence && "text-orange-500"
+            isLowConfidence && "text-orange-500",
+            !isWarning && !isDestructive && !isLowConfidence && "text-foreground"
         )}>
             {value}
         </div>

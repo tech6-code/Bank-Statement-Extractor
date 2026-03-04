@@ -19,9 +19,16 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, fil
     const [startDate, setStartDate] = React.useState('');
     const [endDate, setEndDate] = React.useState('');
     const [showExport, setShowExport] = React.useState(false);
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const pageSize = 20;
 
     const startInputRef = React.useRef<HTMLInputElement>(null);
     const endInputRef = React.useRef<HTMLInputElement>(null);
+
+    // Reset pagination when filters change
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, startDate, endDate]);
 
     const filteredTransactions = transactions.filter(t => {
         const matchesSearch = (t.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -39,52 +46,59 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, fil
         return matchesSearch && matchesDate;
     });
 
+    const totalPages = Math.ceil(filteredTransactions.length / pageSize);
+    const startIndex = (currentPage - 1) * pageSize;
+    const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + pageSize);
+
     return (
-        <div className="space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-4 py-3 bg-muted/20 rounded-lg border border-border/40">
-                <div className="flex flex-wrap items-center gap-4 flex-1">
+        <div className="space-y-6">
+            <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 py-2">
+                <div className="flex flex-wrap items-end gap-4 flex-1">
                     {/* Search Input */}
-                    <div className="relative min-w-[240px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <input
-                            type="text"
-                            placeholder="Search transactions..."
-                            className="w-full bg-background border border-border/50 rounded-md py-1.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                    <div className="flex flex-col gap-1.5 min-w-[300px] flex-1 lg:flex-none">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/50 tracking-widest px-1">Search</span>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
+                            <input
+                                type="text"
+                                placeholder="DESCRIPTION OR DATE..."
+                                className="w-full bg-muted/5 border border-border/40 rounded-md py-2.5 pl-10 pr-4 text-[12px] font-bold uppercase tracking-widest focus:outline-none focus:border-primary/50 focus:bg-muted/10 transition-all placeholder:text-muted-foreground/30"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
                     </div>
 
                     {/* Date Filters */}
-                    <div className="flex items-center gap-2">
-                        <div
-                            className="flex items-center gap-3 bg-background border border-border/50 rounded-md px-3 py-1 hover:border-primary/50 transition-colors focus-within:ring-2 focus-within:ring-primary/20 cursor-pointer"
-                            onClick={() => startInputRef.current?.showPicker()}
-                        >
-                            <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
-                            <div className="flex flex-col">
-                                <span className="text-[9px] uppercase font-bold text-muted-foreground leading-none mb-0.5">From</span>
+                    <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground/50 tracking-widest px-1">From</span>
+                            <div
+                                className="flex items-center gap-3 bg-muted/5 border border-border/40 rounded-md px-4 py-2.5 hover:border-border/60 transition-colors cursor-pointer"
+                                onClick={() => startInputRef.current?.showPicker()}
+                            >
+                                <Calendar className="w-4 h-4 text-muted-foreground/40 shrink-0" />
                                 <input
                                     ref={startInputRef}
                                     type="date"
-                                    className="bg-transparent text-[13px] focus:outline-none w-[110px] cursor-pointer"
+                                    className="bg-transparent text-[13px] font-bold focus:outline-none w-[110px] cursor-pointer tracking-tight text-foreground/90 uppercase"
                                     value={startDate}
                                     onChange={(e) => setStartDate(e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
                                 />
                             </div>
                         </div>
-                        <div
-                            className="flex items-center gap-3 bg-background border border-border/50 rounded-md px-3 py-1 hover:border-primary/50 transition-colors focus-within:ring-2 focus-within:ring-primary/20 cursor-pointer"
-                            onClick={() => endInputRef.current?.showPicker()}
-                        >
-                            <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
-                            <div className="flex flex-col">
-                                <span className="text-[9px] uppercase font-bold text-muted-foreground leading-none mb-0.5">To</span>
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground/50 tracking-widest px-1">To</span>
+                            <div
+                                className="flex items-center gap-3 bg-muted/5 border border-border/40 rounded-md px-4 py-2.5 hover:border-border/60 transition-colors cursor-pointer"
+                                onClick={() => endInputRef.current?.showPicker()}
+                            >
+                                <Calendar className="w-4 h-4 text-muted-foreground/40 shrink-0" />
                                 <input
                                     ref={endInputRef}
                                     type="date"
-                                    className="bg-transparent text-[13px] focus:outline-none w-[110px] cursor-pointer"
+                                    className="bg-transparent text-[13px] font-bold focus:outline-none w-[110px] cursor-pointer tracking-tight text-foreground/90 uppercase"
                                     value={endDate}
                                     onChange={(e) => setEndDate(e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
@@ -94,76 +108,76 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, fil
                         {(startDate || endDate) && (
                             <button
                                 onClick={() => { setStartDate(''); setEndDate(''); }}
-                                className="px-2 py-1 text-[11px] text-primary hover:bg-primary/10 rounded-md font-medium transition-colors"
+                                className="h-[46px] mt-auto px-4 text-[11px] text-destructive/60 hover:text-destructive font-bold uppercase tracking-widest transition-colors border border-destructive/20 rounded-md hover:bg-destructive/5"
                             >
-                                Clear
+                                Reset
                             </button>
                         )}
                     </div>
                 </div>
 
-                <div className="relative shrink-0">
+                <div className="relative shrink-0 pt-5">
                     <button
                         onClick={() => setShowExport(!showExport)}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-semibold transition-all shadow-md active:scale-95"
+                        className="flex items-center gap-2 px-8 py-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-[11px] font-bold uppercase tracking-[0.2em] transition-colors shadow-lg active:scale-95"
                     >
                         <Download className="w-4 h-4" />
-                        <span>Export Data</span>
+                        <span>Export</span>
                     </button>
 
                     {showExport && (
-                        <div className="absolute right-0 mt-2 w-64 bg-card border border-border shadow-2xl rounded-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
-                            <div className="p-2.5 bg-muted/30 border-b border-border/50">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground px-2">Export Filtered ({filteredTransactions.length})</span>
+                        <div className="absolute right-0 mt-3 w-72 bg-card border border-border shadow-2xl rounded-md overflow-hidden z-50">
+                            <div className="p-3 bg-muted/20 border-b border-border/40">
+                                <span className="text-[10px] uppercase font-bold text-muted-foreground px-2 tracking-widest">Filtered ({filteredTransactions.length})</span>
                             </div>
-                            <div className="p-1">
+                            <div className="p-1.5">
                                 <button
                                     onClick={() => { exportToExcel(filteredTransactions, `${fileName}_filtered`); setShowExport(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted rounded-lg text-sm transition-colors"
+                                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/30 rounded text-[13px] font-bold uppercase tracking-tight transition-colors"
                                 >
                                     <FileSpreadsheet className="w-4 h-4 text-green-500" />
-                                    <span>Excel (.xlsx)</span>
+                                    <span>Excel</span>
                                 </button>
                                 <button
                                     onClick={() => { exportToCSV(filteredTransactions, `${fileName}_filtered`); setShowExport(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted rounded-lg text-sm transition-colors"
+                                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/30 rounded text-[13px] font-bold uppercase tracking-tight transition-colors"
                                 >
                                     <FileText className="w-4 h-4 text-blue-500" />
-                                    <span>CSV (.csv)</span>
+                                    <span>CSV</span>
                                 </button>
                                 <button
                                     onClick={() => { exportToJSON(filteredTransactions, `${fileName}_filtered`); setShowExport(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted rounded-lg text-sm transition-colors"
+                                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/30 rounded text-[13px] font-bold uppercase tracking-tight transition-colors"
                                 >
                                     <Code className="w-4 h-4 text-orange-500" />
-                                    <span>JSON (.json)</span>
+                                    <span>JSON</span>
                                 </button>
                             </div>
 
-                            <div className="p-2.5 bg-muted/30 border-y border-border/50">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground px-2">Export All ({transactions.length})</span>
+                            <div className="p-3 bg-muted/20 border-y border-border/40">
+                                <span className="text-[10px] uppercase font-bold text-muted-foreground px-2 tracking-widest">All Records ({transactions.length})</span>
                             </div>
-                            <div className="p-1">
+                            <div className="p-1.5">
                                 <button
                                     onClick={() => { exportToExcel(transactions, fileName); setShowExport(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted rounded-lg text-sm transition-colors"
+                                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/30 rounded text-[13px] font-bold uppercase tracking-tight transition-colors opacity-70"
                                 >
-                                    <FileSpreadsheet className="w-4 h-4 text-green-500 opacity-60" />
-                                    <span>Excel (.xlsx)</span>
+                                    <FileSpreadsheet className="w-4 h-4 text-green-500/60" />
+                                    <span>Excel Full</span>
                                 </button>
                                 <button
                                     onClick={() => { exportToCSV(transactions, fileName); setShowExport(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted rounded-lg text-sm transition-colors"
+                                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/30 rounded text-[13px] font-bold uppercase tracking-tight transition-colors opacity-70"
                                 >
-                                    <FileText className="w-4 h-4 text-blue-500 opacity-60" />
-                                    <span>CSV (.csv)</span>
+                                    <FileText className="w-4 h-4 text-blue-500/60" />
+                                    <span>CSV Full</span>
                                 </button>
                                 <button
                                     onClick={() => { exportToJSON(transactions, fileName); setShowExport(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted rounded-lg text-sm transition-colors"
+                                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/30 rounded text-[13px] font-bold uppercase tracking-tight transition-colors opacity-70"
                                 >
-                                    <Code className="w-4 h-4 text-orange-500 opacity-60" />
-                                    <span>JSON (.json)</span>
+                                    <Code className="w-4 h-4 text-orange-500/60" />
+                                    <span>JSON Full</span>
                                 </button>
                             </div>
                         </div>
@@ -171,58 +185,86 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, fil
                 </div>
             </div>
 
-            <div className="w-full max-h-[75vh] overflow-auto border border-border/50 rounded-lg custom-scrollbar">
-                <table className="w-full min-w-[1000px] text-sm text-left border-collapse">
-                    <thead>
-                        <tr className="bg-muted/50 border-b border-border/50 sticky top-0 z-10 text-center">
-                            <th className="px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/95 backdrop-blur-sm w-12">#</th>
-                            <th className="px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/95 backdrop-blur-sm text-left">Date</th>
-                            <th className="px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/95 backdrop-blur-sm text-left">Description</th>
-                            <th className="px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/95 backdrop-blur-sm text-right">Debit</th>
-                            <th className="px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/95 backdrop-blur-sm text-right">Credit</th>
-                            <th className="px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/95 backdrop-blur-sm text-right">Balance</th>
-                            <th className="px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/95 backdrop-blur-sm text-left">Status</th>
+            <div className="w-full max-h-[75vh] overflow-auto border border-border/40 rounded-md custom-scrollbar bg-card">
+                <table className="w-full min-w-[1000px] text-left border-collapse">
+                    <thead className="sticky top-0 z-20">
+                        <tr className="bg-card border-b border-border/50">
+                            <th className="px-5 py-5 font-bold text-muted-foreground/80 uppercase tracking-widest text-[11px] w-14 text-center">#</th>
+                            <th className="px-5 py-5 font-bold text-muted-foreground/80 uppercase tracking-widest text-[11px]">Date</th>
+                            <th className="px-5 py-5 font-bold text-muted-foreground/80 uppercase tracking-widest text-[11px]">Description</th>
+                            <th className="px-5 py-5 font-bold text-muted-foreground/80 uppercase tracking-widest text-[11px] text-right">Debit</th>
+                            <th className="px-5 py-5 font-bold text-muted-foreground/80 uppercase tracking-widest text-[11px] text-right">Credit</th>
+                            <th className="px-5 py-5 font-bold text-muted-foreground/80 uppercase tracking-widest text-[11px] text-right">Balance</th>
+                            <th className="px-5 py-5 font-bold text-muted-foreground/80 uppercase tracking-widest text-[11px]">Status</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/30">
-                        {filteredTransactions.map((t, index) => (
-                            <tr
-                                key={t.id}
-                                className={cn(
-                                    "hover:bg-muted/10 transition-colors",
-                                    t.reconciliation_status === 'mismatch' && "bg-destructive/10",
-                                    t.reconciliation_status === 'corrected' && "bg-yellow-500/10"
-                                )}
-                            >
-                                <td className="px-4 py-3 whitespace-nowrap font-mono text-center text-muted-foreground text-[11px] border-r border-border/10">{index + 1}</td>
-                                <td className="px-4 py-3 whitespace-nowrap font-mono">{(t.transaction_date || '').split('T')[0]}</td>
-                                <td className="px-4 py-3 min-w-[300px]">
-                                    <div className="font-medium truncate max-w-[400px]" title={t.description}>
-                                        {t.description}
-                                    </div>
-                                    {t.validation_error && (
-                                        <span className="text-[10px] text-destructive leading-tight block mt-1">
-                                            {t.validation_error}
-                                        </span>
+                    <tbody className="divide-y divide-border/20">
+                        {paginatedTransactions.map((t, index) => {
+                            const actualIndex = startIndex + index + 1;
+                            return (
+                                <tr
+                                    key={t.id}
+                                    className={cn(
+                                        "transition-colors",
+                                        t.reconciliation_status === 'mismatch' ? "bg-destructive/[0.05] hover:bg-destructive/[0.08]" : "hover:bg-muted/[0.05]",
+                                        t.reconciliation_status === 'corrected' && "bg-yellow-500/[0.05] hover:bg-yellow-500/[0.08]"
                                     )}
-                                </td>
-                                <td className="px-4 py-3 text-right font-mono text-destructive">
-                                    {t.debit ? t.debit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-right font-mono text-green-500">
-                                    {t.credit ? t.credit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-right font-mono font-bold">
-                                    {t.balance ? t.balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
-                                </td>
-                                <td className="px-4 py-3">
-                                    <StatusBadge status={t.reconciliation_status} />
-                                </td>
-                            </tr>
-                        ))}
+                                >
+                                    <td className="px-5 py-4 whitespace-nowrap font-mono text-center text-muted-foreground/60 text-[12px] font-bold">{actualIndex}</td>
+                                    <td className="px-5 py-4 whitespace-nowrap text-[14px] font-bold tracking-tight text-foreground/80">{(t.transaction_date || '').split('T')[0]}</td>
+                                    <td className="px-5 py-4 min-w-[350px]">
+                                        <div className="text-[14px] font-bold truncate max-w-[500px] tracking-tight text-foreground/90 leading-relaxed uppercase" title={t.description}>
+                                            {t.description}
+                                        </div>
+                                        {t.validation_error && (
+                                            <span className="text-[11px] font-bold text-destructive/90 uppercase tracking-tight block mt-1">
+                                                {t.validation_error}
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-5 py-4 text-right text-[14px] font-bold font-mono text-destructive tracking-tighter">
+                                        {t.debit ? t.debit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
+                                    </td>
+                                    <td className="px-5 py-4 text-right text-[14px] font-bold font-mono text-green-500 tracking-tighter">
+                                        {t.credit ? t.credit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
+                                    </td>
+                                    <td className="px-5 py-4 text-right text-[14px] font-bold font-mono tracking-tighter text-foreground">
+                                        {t.balance ? t.balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        <StatusBadge status={t.reconciliation_status} />
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
+
+            {/* Pagination UI */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between py-4 px-2 border-t border-border/30">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                        SHOWING PAGE <span className="text-foreground">{currentPage}</span> OF <span className="text-foreground">{totalPages}</span> ({filteredTransactions.length} items)
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest border border-border/40 rounded-md hover:bg-muted/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                        >
+                            PREV
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest border border-border/40 rounded-md hover:bg-muted/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                        >
+                            NEXT
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -230,26 +272,11 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, fil
 const StatusBadge = ({ status }: { status: Transaction['reconciliation_status'] }) => {
     switch (status) {
         case 'valid':
-            return (
-                <div className="flex items-center gap-1.5 text-green-500 font-medium text-[11px]">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Valid</span>
-                </div>
-            );
+            return <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">VALID</span>;
         case 'mismatch':
-            return (
-                <div className="flex items-center gap-1.5 text-destructive font-medium text-[11px]">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Mismatch</span>
-                </div>
-            );
+            return <span className="text-[10px] font-bold text-destructive uppercase tracking-widest">MISMATCH</span>;
         case 'corrected':
-            return (
-                <div className="flex items-center gap-1.5 text-yellow-500 font-medium text-[11px]">
-                    <History className="w-3.5 h-3.5" />
-                    <span>Corrected</span>
-                </div>
-            );
+            return <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">CORRECTED</span>;
         default:
             return null;
     }

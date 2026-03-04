@@ -16,12 +16,11 @@ const model = genAI.getGenerativeModel({
 
 export const extractTransactionsWithGemini = async (text: string) => {
   const prompt = `
-    Analyze the following bank statement text (which may be a markdown table or raw OCR).
-    1. Extract Statement Header Info (Account Number, IBAN, Currency, Period, Branch, etc.).
-    2. Extract ALL Transactions.
+    Analyze the following bank statement text. It includes both "RAW PAGE TEXT" for context and a "TRANSACTION GRID" which is a spatial reconstruction of the page layout.
 
-    Accuracy is critical (100% capture). 
-    
+    1. Extract Statement Header Info (Account Number, IBAN, Currency, Period, Branch, etc.) from the top of the page.
+    2. Extract ALL Transactions from the grid.
+
     JSON Schema:
     {
       "header_info": {
@@ -45,23 +44,18 @@ export const extractTransactionsWithGemini = async (text: string) => {
     }
 
     Rules:
-    - DATA FIDELITY: Every single row in the "TRANSACTION GRID" that represents a money movement MUST be extracted. 
-    - GRID FORMAT: Each line below the "### TRANSACTION GRID" header represents a horizontal line in the original PDF.
-    - DATE RECOGNITION: Convert all dates to YYYY-MM-DD. 
-      CRITICAL: Identify the specific grid column for "Transaction Date" (e.g., Column 1). 
-      STRICT FORBIDDEN: NEVER use dates found in the Narrative/Description. 
-      Example: If a cell in the Narrative column says "SETT 310825", IGNORE IT. Use the date from the Date column.
-      STRICT FORBIDDEN: DO NOT guess months. NEVER default to the 1st.
-    - COLUMN MAPPING:
-      - Date: Use the identified Date column from the grid.
-      - Description: Use the Narrative/Description column.
-      - Debit/Credit: Use the respective amount columns.
-      - Balance: Use the Running Balance column.
-    - NUMERIC VALUES: Return absolute positive numbers.
-    - MULTI-LINE NARRATIVES: If a transaction description spans multiple grid rows but has only one date/amount pair, merge them.
-    - HEADER INFO: Extract metadata from the start of the text into header_info.
-
-    Input Transaction Grid (Spatial OCR):
+    - DATA FIDELITY: Your primary goal is 100% extraction of every money-movement row. Absolute accuracy is required.
+    - SPATIAL AWARENESS: Use the "TRANSACTION GRID" to understand columns. Each line is a literal horizontal row from the PDF.
+    - EMPTY PAGES: If a page contains NO transactions (e.g., only headers or summary), return an empty "transactions" array []. This is NOT an error.
+    - AMOUNT EXTRACTION: 
+      - Debit = Money OUT (Withdrawals/Payments).
+      - Credit = Money IN (Deposits/Interest).
+      - If columns are ambiguous (e.g., one "Amount" column), use the Running Balance to determine direction.
+    - DATE RECOGNITION: Convert all dates to YYYY-MM-DD. Use the leftmost date column.
+    - MULTI-LINE NARRATIVES: Merge multi-line descriptions into a single string.
+    - NUMERIC CLEANING: Remove currency symbols and commas. Ensure absolute positive numbers for debit/credit.
+    
+    Input:
     ${text}
   `;
 

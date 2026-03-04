@@ -37,22 +37,18 @@ export const extractTransactionsFromText = async (text: string) => {
     }
 
     Rules:
-    - DATA FIDELITY: Every single row in the "TRANSACTION GRID" that represents a money movement MUST be extracted. 
-    - GRID FORMAT: Each line below the "### TRANSACTION GRID" header represents a horizontal line in the original PDF.
+    - DATA FIDELITY: Your primary goal is 100% extraction of every money-movement row.
+    - SPATIAL AWARENESS: Each line in the input below "### TRANSACTION GRID" is a literal horizontal line from the PDF. Preserve this row-based structure.
+    - AMOUNT EXTRACTION: 
+      - Debit = Money OUT (Withdrawals/Payments).
+      - Credit = Money IN (Deposits/Interest).
+      - If a column is ambiguous, use the Running Balance to determine the direction.
     - DATE RECOGNITION: Convert all dates to YYYY-MM-DD. 
-      CRITICAL: Identify the specific grid column for "Transaction Date" (e.g., Column 1). 
-      STRICT FORBIDDEN: NEVER use dates found in the Narrative/Description. 
-      Example: If a cell in the Narrative column says "SETT 310825", IGNORE IT. Use the date from the Date column.
-      STRICT FORBIDDEN: DO NOT guess months. NEVER default to the 1st.
-    - COLUMN MAPPING:
-      - Date: Use the identified Date column from the grid.
-      - Description: Use the Narrative/Description column.
-      - Debit/Credit: Use the respective amount columns.
-      - Balance: Use the Running Balance column.
-    - NUMERIC VALUES: Return absolute positive numbers.
-    - MULTI-LINE NARRATIVES: If a transaction description spans multiple grid rows but has only one date/amount pair, merge them.
-    - HEADER INFO: Extract metadata from the start of the text into header_info.
-
+      CRITICAL: Use the leftmost date column. NEVER extract dates from the description text.
+    - MULTI-LINE NARRATIVES: If a description spans multiple lines but belongs to one transaction (one date/amount), MERGE the description text into a single string.
+    - NUMERIC CLEANING: Remove currency symbols and commas. Ensure absolute positive numbers for debit/credit.
+    - HEADER INFO: Carefully extract Account Number, IBAN, and Opening/Closing balances from the top metadata.
+    
     Input Transaction Grid (Spatial OCR):
     ${text}
   `;

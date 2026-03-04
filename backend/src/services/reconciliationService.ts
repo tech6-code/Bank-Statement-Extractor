@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { normalizeDate } from '../utils/dateUtils';
 
 export interface Transaction {
     date: string;
@@ -16,7 +17,7 @@ export const detectDuplicates = (transactions: Transaction[]) => {
     let duplicateCount = 0;
 
     for (const t of transactions) {
-        const date = t.date ? t.date.split('T')[0] : '';
+        const date = normalizeDate(t.date);
         const desc = (t.description || '').toLowerCase().trim();
         const debit = Math.abs(t.debit ?? 0);
         const credit = Math.abs(t.credit ?? 0);
@@ -40,64 +41,137 @@ export const detectDuplicates = (transactions: Transaction[]) => {
     return { uniqueTransactions, duplicateCount: 0 };
 };
 
-export const reconcileTransactions = (transactions: Transaction[]) => {
+export const reconcileTransactions = (transactions: Transaction[], headerInfo: any = {}) => {
     let reconciliationErrorsCount = 0;
     const processed: Transaction[] = [];
 
     // 1. Initial Sort by Date
-    // We rely on the initial array order for same-day stable sorting,
-    // which should match the PDF reading order.
     const sorted = [...transactions].sort((a, b) => {
         if (a.date < b.date) return -1;
         if (a.date > b.date) return 1;
         return 0;
     });
 
-    // 2. Intra-day Sequence Optimization (Experimental)
-    // If same-day transactions are scrambled, we can try to order them by balance flow.
-    // However, for now, we trust the PDF order (stable sort) and our improved Gemini prompt.
+    // 2. Sequential Reconciliation with Intra-day Permutation attempt
+    let currentBalance = headerInfo.opening_balance !== undefined && headerInfo.opening_balance !== null
+        ? Number(headerInfo.opening_balance)
+        : (sorted.length > 0 ? (sorted[0].balance !== null ? sorted[0].balance - (sorted[0].credit ?? 0) + (sorted[0].debit ?? 0) : null) : null);
 
-    // 2. Sequential Reconciliation
-    for (let i = 0; i < sorted.length; i++) {
-        const current = { ...sorted[i] };
-        const previous = i > 0 ? processed[i - 1] : null;
+    const groupsByDate: { [date: string]: Transaction[] } = {};
+    for (const t of sorted) {
+        if (!groupsByDate[t.date]) groupsByDate[t.date] = [];
+        groupsByDate[t.date].push(t);
+    }
 
-        // Ensure absolute values
-        const debit = Math.abs(current.debit ?? 0);
-        const credit = Math.abs(current.credit ?? 0);
-        current.debit = debit > 0 ? debit : null;
-        current.credit = credit > 0 ? credit : null;
+    const sortedDates = Object.keys(groupsByDate).sort();
 
-        if (previous && previous.balance !== null && current.balance !== null) {
-            // Expected: Previous Balance + credit - debit
-            const expectedBalance = Number((previous.balance + (current.credit ?? 0) - (current.debit ?? 0)).toFixed(2));
+    for (const date of sortedDates) {
+        const dayTransactions = groupsByDate[date];
 
-            if (Math.abs(expectedBalance - current.balance) > 0.01) {
-                // Try swapping debit/credit (common extraction error)
-                const swappedExpectedBalance = Number((previous.balance + (current.debit ?? 0) - (current.credit ?? 0)).toFixed(2));
-
-                if (Math.abs(swappedExpectedBalance - current.balance) <= 0.01) {
-                    const temp = current.debit;
-                    current.debit = current.credit;
-                    current.credit = temp;
-                    current.reconciliation_status = 'corrected';
-                } else {
-                    current.reconciliation_status = 'mismatch';
-                    current.validation_error = `Expected balance ${expectedBalance}, but got ${current.balance}`;
-                    reconciliationErrorsCount++;
-                }
-            } else {
-                current.reconciliation_status = 'valid';
+        // If there's only one transaction or balance context is missing, process normally
+        if (dayTransactions.length === 1 || currentBalance === null) {
+            for (const t of dayTransactions) {
+                const reconciled = reconcileOne(t, currentBalance);
+                processed.push(reconciled);
+                currentBalance = reconciled.balance;
+                if (reconciled.reconciliation_status === 'mismatch') reconciliationErrorsCount++;
             }
         } else {
-            // First transaction or missing balance context
-            current.reconciliation_status = 'valid';
-        }
+            // Try to find a sequence that works for same-day transactions
+            // This is a simple greedy approach: find the one that matches the current balance
+            let remaining = [...dayTransactions];
+            let daySequence: Transaction[] = [];
+            let tempBalance = currentBalance;
 
-        processed.push(current);
+            while (remaining.length > 0) {
+                let foundMatch = false;
+                for (let i = 0; i < remaining.length; i++) {
+                    const t = remaining[i];
+                    const debit = Math.abs(t.debit ?? 0);
+                    const credit = Math.abs(t.credit ?? 0);
+
+                    if (t.balance !== null) {
+                        const expected = Number((tempBalance + credit - debit).toFixed(2));
+                        if (Math.abs(expected - t.balance) <= 0.01) {
+                            const reconciled = { ...t, debit: debit > 0 ? debit : null, credit: credit > 0 ? credit : null, reconciliation_status: 'valid' as const };
+                            daySequence.push(reconciled);
+                            tempBalance = reconciled.balance as number;
+                            remaining.splice(i, 1);
+                            foundMatch = true;
+                            break;
+                        }
+
+                        // Try swap
+                        const swappedExpected = Number((tempBalance + debit - credit).toFixed(2));
+                        if (Math.abs(swappedExpected - t.balance) <= 0.01) {
+                            const reconciled = { ...t, debit: credit > 0 ? credit : null, credit: debit > 0 ? debit : null, reconciliation_status: 'corrected' as const };
+                            daySequence.push(reconciled);
+                            tempBalance = reconciled.balance as number;
+                            remaining.splice(i, 1);
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!foundMatch) {
+                    // Fallback: just take the next one and mark as mismatch
+                    const t = remaining.shift()!;
+                    const reconciled = reconcileOne(t, tempBalance);
+                    daySequence.push(reconciled);
+                    tempBalance = reconciled.balance as number;
+                    if (reconciled.reconciliation_status === 'mismatch') reconciliationErrorsCount++;
+                }
+            }
+            processed.push(...daySequence);
+            currentBalance = tempBalance;
+        }
+    }
+
+    // Final check against closing balance if available
+    if (headerInfo.closing_balance !== undefined && headerInfo.closing_balance !== null && currentBalance !== null) {
+        if (Math.abs(currentBalance - Number(headerInfo.closing_balance)) > 0.01) {
+            console.warn(`Final balance ${currentBalance} does not match statement closing balance ${headerInfo.closing_balance}`);
+        }
     }
 
     return { reconciledTransactions: processed, reconciliationErrorsCount };
+};
+
+const reconcileOne = (current: Transaction, previousBalance: number | null): Transaction => {
+    const t = { ...current };
+    const debit = Math.abs(t.debit ?? 0);
+    const credit = Math.abs(t.credit ?? 0);
+    t.debit = debit > 0 ? debit : null;
+    t.credit = credit > 0 ? credit : null;
+
+    if (previousBalance !== null && t.balance !== null) {
+        const expectedBalance = Number((previousBalance + credit - debit).toFixed(2));
+
+        if (Math.abs(expectedBalance - t.balance) > 0.01) {
+            const swappedExpectedBalance = Number((previousBalance + debit - credit).toFixed(2));
+
+            if (Math.abs(swappedExpectedBalance - t.balance) <= 0.01) {
+                t.debit = t.credit;
+                t.credit = debit > 0 ? debit : null;
+                t.reconciliation_status = 'corrected';
+            } else {
+                t.reconciliation_status = 'mismatch';
+                t.validation_error = `Expected balance ${expectedBalance}, but got ${t.balance}`;
+            }
+        } else {
+            t.reconciliation_status = 'valid';
+        }
+    } else if (previousBalance !== null && t.balance === null) {
+        // Recover missing balance
+        t.balance = Number((previousBalance + (t.credit ?? 0) - (t.debit ?? 0)).toFixed(2));
+        t.reconciliation_status = 'corrected';
+        t.validation_error = 'Recovered missing balance';
+    } else {
+        t.reconciliation_status = 'valid';
+    }
+
+    return t;
 };
 
 export const calculateConfidence = (

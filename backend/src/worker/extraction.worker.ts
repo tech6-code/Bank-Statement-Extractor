@@ -10,6 +10,7 @@ import {
     reconcileTransactions,
     calculateConfidence,
 } from '../services/reconciliationService';
+import { normalizeDate } from '../utils/dateUtils';
 
 const worker = new Worker(
     'extraction-queue',
@@ -72,11 +73,16 @@ const worker = new Worker(
                     while (attempt < maxRetries) {
                         try {
                             console.log(`[Batch ${Math.floor(i / batchSize) + 1}] Processing chunk ${i + index + 1} (Attempt ${attempt + 1})...`);
+                            // Primary: Gemini
                             result = await extractTransactionsWithGemini(chunk);
-                            if (result) break; // Success
+                            if (result && (result.transactions || result.header_info)) break; // Success (even if transactions is empty)
+                            else {
+                                console.warn(`Gemini returned invalid results for chunk ${i + index + 1}`);
+                                throw new Error('Invalid results from Gemini');
+                            }
                         } catch (geminiError: any) {
                             attempt++;
-                            console.warn(`Attempt ${attempt} failed for chunk ${i + index + 1}: ${geminiError.message}`);
+                            console.warn(`Attempt ${attempt} failed for Gemini on chunk ${i + index + 1}: ${geminiError.message}`);
                             if (attempt === maxRetries) {
                                 console.error(`Gemini failed after ${maxRetries} attempts, falling back to Claude...`);
                                 try {
@@ -104,11 +110,17 @@ const worker = new Worker(
                         allTransactions = allTransactions.concat(transactions);
                         combinedHeaderInfo = { ...combinedHeaderInfo, ...headerInfo };
 
-                        // Save raw data per chunk
-                        await pool.execute('INSERT INTO raw_extracted_data (job_id, raw_row_data) VALUES (?, ?)', [
-                            jobId,
-                            JSON.stringify(result),
-                        ]);
+                        // Save raw data per chunk (Check if job still exists to avoid FK error)
+                        const [jobExists]: any = await pool.execute('SELECT id FROM extraction_jobs WHERE id = ?', [jobId]);
+                        if (jobExists.length > 0) {
+                            await pool.execute('INSERT INTO raw_extracted_data (job_id, raw_row_data) VALUES (?, ?)', [
+                                jobId,
+                                JSON.stringify(result),
+                            ]);
+                        } else {
+                            console.warn(`Job ${jobId} was deleted. Stopping processing for this chunk.`);
+                            return null;
+                        }
                     }
                 }
 
@@ -170,7 +182,8 @@ const worker = new Worker(
 
             // 7. Reconciliation Logic (Sequential)
             const { reconciledTransactions, reconciliationErrorsCount } = reconcileTransactions(
-                uniqueTransactions
+                uniqueTransactions,
+                combinedHeaderInfo
             );
 
             // 7. Confidence Scoring
@@ -188,7 +201,7 @@ const worker = new Worker(
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         jobId,
-                        t.date || null,
+                        normalizeDate(t.date) || null,
                         t.description || null,
                         t.debit ?? null,
                         t.credit ?? null,

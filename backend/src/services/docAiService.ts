@@ -105,19 +105,21 @@ export const extractPagesContent = (document: any) => {
     for (const page of document.pages) {
         let pageContent = `--- PAGE ${page.pageNumber || ''} ---\n`;
 
-        // Use a Spatial Grid approach instead of unreliable Table detection
+        // 1. Raw Text (for context)
+        const textSegments = page.layout?.textAnchor?.textSegments || [];
+        let rawPageText = "";
+        for (const segment of textSegments) {
+            const start = segment.startIndex || 0;
+            const end = segment.endIndex || 0;
+            rawPageText += document.text.substring(start, end);
+        }
+        pageContent += "### RAW PAGE TEXT:\n" + rawPageText.trim() + "\n\n";
+
+        // 2. Spatial Grid (for tabular data)
         const grid = extractGridFromPage(page, document.text);
         if (grid) {
             pageContent += "### TRANSACTION GRID (SPATIAL OCR DATA):\n";
             pageContent += grid + "\n";
-        } else {
-            // Fallback to raw text if no layout available
-            const textSegments = page.layout?.textAnchor?.textSegments || [];
-            for (const segment of textSegments) {
-                const start = segment.startIndex || 0;
-                const end = segment.endIndex || 0;
-                pageContent += document.text.substring(start, end);
-            }
         }
 
         pages.push(pageContent);
@@ -176,10 +178,10 @@ function extractGridFromPage(page: any, fullText: string): string {
         rows.push(currentRow);
     }
 
-    // 2. Cluster X-coordinates into 10 virtual "buckets" (columns)
+    // 2. Cluster X-coordinates into 20 virtual "buckets" (columns)
     // Find the max boundary to normalize buckets
     const maxX = Math.max(...lines.map((l: any) => l.xRight)) || 1000;
-    const bucketCount = 10;
+    const bucketCount = 20;
     const bucketSize = maxX / bucketCount;
 
     const formattedRows = rows.map(row => {

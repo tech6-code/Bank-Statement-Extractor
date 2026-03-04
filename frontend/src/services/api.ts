@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -26,7 +26,7 @@ export const getJobStatus = async (jobId: string) => {
 
 export const getJobs = async () => {
     const { data } = await api.get('/jobs');
-    return data.jobs as Job[];
+    return (data?.jobs || []) as Job[];
 };
 
 export const deleteJob = async (jobId: string) => {

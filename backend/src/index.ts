@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Load environment variables from root .env
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import extractionRoutes from './routes/extraction.routes';
 import swaggerRouter from './config/swagger';

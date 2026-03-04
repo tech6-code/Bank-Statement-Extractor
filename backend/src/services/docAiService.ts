@@ -2,7 +2,7 @@ import { v1 } from '@google-cloud/documentai';
 import path from 'path';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const client = new v1.DocumentProcessorServiceClient();
 
